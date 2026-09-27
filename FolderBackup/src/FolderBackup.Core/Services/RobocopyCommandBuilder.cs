@@ -7,10 +7,12 @@ namespace FolderBackup.Core.Services;
 
 public sealed class RobocopyCommandBuilder : IRobocopyCommandBuilder
 {
+    private readonly IBackupTargetResolver _targetResolver;
     private readonly RobocopyOptions _options;
 
-    public RobocopyCommandBuilder(IOptions<RobocopyOptions> options)
+    public RobocopyCommandBuilder(IBackupTargetResolver targetResolver, IOptions<RobocopyOptions> options)
     {
+        _targetResolver = targetResolver;
         _options = options.Value;
     }
 
@@ -25,7 +27,7 @@ public sealed class RobocopyCommandBuilder : IRobocopyCommandBuilder
         List<string> arguments =
         [
             FormatPath(job.SourcePath),
-            FormatPath(job.DestinationPath),
+            FormatPath(_targetResolver.GetTargetPath(job)),
             RobocopyFlags.IncludeSubdirectories,
             RobocopyFlags.CopyDataAttributesTimestamps,
             RobocopyFlags.CopyDirectoryTimestamps,

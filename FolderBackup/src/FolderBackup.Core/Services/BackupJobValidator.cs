@@ -5,9 +5,17 @@ namespace FolderBackup.Core.Services;
 
 public sealed class BackupJobValidator : IBackupJobValidator
 {
-    public ValidationResult ValidateConfiguration(BackupJob job)
+    private readonly IBackupTargetResolver _targetResolver;
+
+    public BackupJobValidator(IBackupTargetResolver targetResolver)
+    {
+        _targetResolver = targetResolver;
+    }
+
+    public ValidationResult ValidateConfiguration(BackupJob job, IReadOnlyCollection<BackupJob> otherJobs)
     {
         ArgumentNullException.ThrowIfNull(job);
+        ArgumentNullException.ThrowIfNull(otherJobs);
         var errors = new List<string>();
 
         if (string.IsNullOrWhiteSpace(job.Name))
@@ -15,12 +23,13 @@ public sealed class BackupJobValidator : IBackupJobValidator
             errors.Add(ValidationMessages.NameRequired);
         }
 
-        var source = TryGetFullPath(job.SourcePath, ValidationMessages.SourceRequired, errors);
-        var destination = TryGetFullPath(job.DestinationPath, ValidationMessages.DestinationRequired, errors);
+        var sourceIsValid = ValidatePath(job.SourcePath, ValidationMessages.SourceRequired, errors);
+        var destinationIsValid = ValidatePath(job.DestinationPath, ValidationMessages.DestinationRequired, errors);
 
-        if (source is not null && destination is not null)
+        if (sourceIsValid && destinationIsValid && _targetResolver.TryGetTargetPath(job, out var target))
         {
-            AddOverlapErrors(source, destination, errors);
+            AddOverlapErrors(Path.GetFullPath(job.SourcePath), target, errors);
+            AddConflictErrors(job, target, otherJobs, errors);
         }
 
         return new ValidationResult(errors);
@@ -28,7 +37,7 @@ public sealed class BackupJobValidator : IBackupJobValidator
 
     public ValidationResult ValidateReadyToRun(BackupJob job)
     {
-        var configuration = ValidateConfiguration(job);
+        var configuration = ValidateConfiguration(job, []);
         if (!configuration.IsValid)
         {
             return configuration;
@@ -50,50 +59,67 @@ public sealed class BackupJobValidator : IBackupJobValidator
         return new ValidationResult(errors);
     }
 
-    private static string? TryGetFullPath(string path, string requiredMessage, List<string> errors)
+    private static bool ValidatePath(string path, string requiredMessage, List<string> errors)
     {
         if (string.IsNullOrWhiteSpace(path))
         {
             errors.Add(requiredMessage);
-            return null;
+            return false;
         }
 
         // Relative paths are dangerous here: the scheduled task runs with a different working directory.
         if (!Path.IsPathFullyQualified(path))
         {
             errors.Add(ValidationMessages.PathMustBeAbsolute(path));
-            return null;
+            return false;
         }
 
         try
         {
-            return Path.GetFullPath(path);
+            Path.GetFullPath(path);
+            return true;
         }
         catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
         {
             errors.Add(ValidationMessages.InvalidPath(path));
-            return null;
+            return false;
         }
     }
 
-    private static void AddOverlapErrors(string source, string destination, List<string> errors)
+    private static void AddOverlapErrors(string source, string target, List<string> errors)
     {
-        var sourceDirectory = WithTrailingSeparator(source);
-        var destinationDirectory = WithTrailingSeparator(destination);
-
-        if (string.Equals(sourceDirectory, destinationDirectory, StringComparison.OrdinalIgnoreCase))
+        if (IsSameOrInside(target, source))
         {
-            errors.Add(ValidationMessages.SameFolder);
+            errors.Add(IsSameOrInside(source, target)
+                ? ValidationMessages.SourceIsTarget(target)
+                : ValidationMessages.TargetInsideSource(target));
         }
-        else if (destinationDirectory.StartsWith(sourceDirectory, StringComparison.OrdinalIgnoreCase))
+        else if (IsSameOrInside(source, target))
         {
-            errors.Add(ValidationMessages.DestinationInsideSource);
-        }
-        else if (sourceDirectory.StartsWith(destinationDirectory, StringComparison.OrdinalIgnoreCase))
-        {
-            errors.Add(ValidationMessages.SourceInsideDestination);
+            errors.Add(ValidationMessages.SourceInsideTarget(target));
         }
     }
+
+    /// <summary>Two jobs must never write into the same folder, or into each other's folders.</summary>
+    private void AddConflictErrors(BackupJob job, string target, IEnumerable<BackupJob> otherJobs, List<string> errors)
+    {
+        foreach (var other in otherJobs)
+        {
+            if (other.Id == job.Id || !_targetResolver.TryGetTargetPath(other, out var otherTarget))
+            {
+                continue;
+            }
+
+            if (IsSameOrInside(target, otherTarget) || IsSameOrInside(otherTarget, target))
+            {
+                errors.Add(ValidationMessages.TargetInUse(other.Name, otherTarget));
+                return;
+            }
+        }
+    }
+
+    private static bool IsSameOrInside(string path, string folder) =>
+        WithTrailingSeparator(path).StartsWith(WithTrailingSeparator(folder), StringComparison.OrdinalIgnoreCase);
 
     private static string WithTrailingSeparator(string path) =>
         Path.EndsInDirectorySeparator(path) ? path : path + Path.DirectorySeparatorChar;

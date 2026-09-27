@@ -10,6 +10,7 @@ public sealed class BackupService : IBackupService
     private readonly IRobocopyCommandBuilder _commandBuilder;
     private readonly IRobocopyRunner _robocopy;
     private readonly IBackupJobValidator _validator;
+    private readonly IBackupTargetResolver _targetResolver;
     private readonly IBackupRunLock _runLock;
     private readonly IBackupLogFactory _logFactory;
     private readonly TimeProvider _timeProvider;
@@ -19,6 +20,7 @@ public sealed class BackupService : IBackupService
         IRobocopyCommandBuilder commandBuilder,
         IRobocopyRunner robocopy,
         IBackupJobValidator validator,
+        IBackupTargetResolver targetResolver,
         IBackupRunLock runLock,
         IBackupLogFactory logFactory,
         TimeProvider timeProvider,
@@ -27,6 +29,7 @@ public sealed class BackupService : IBackupService
         _commandBuilder = commandBuilder;
         _robocopy = robocopy;
         _validator = validator;
+        _targetResolver = targetResolver;
         _runLock = runLock;
         _logFactory = logFactory;
         _timeProvider = timeProvider;
@@ -39,6 +42,11 @@ public sealed class BackupService : IBackupService
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(jobs);
+
+        if (jobs.Count == 0)
+        {
+            return BackupRunResult.Completed([], logFilePath: null);
+        }
 
         using var runLock = _runLock.TryAcquire();
         if (runLock is null)
@@ -74,7 +82,6 @@ public sealed class BackupService : IBackupService
         CancellationToken ct)
     {
         var startedAt = _timeProvider.GetTimestamp();
-        log.WriteLine($"[{job.Name}] {job.SourcePath} -> {job.DestinationPath} ({job.Mode})");
 
         var validation = _validator.ValidateReadyToRun(job);
         if (!validation.IsValid)
@@ -86,6 +93,8 @@ public sealed class BackupService : IBackupService
 
             return BackupJobResult.Skipped(job, validation.Errors);
         }
+
+        log.WriteLine($"[{job.Name}] {job.SourcePath} -> {_targetResolver.GetTargetPath(job)} ({job.Mode})");
 
         var tracker = new BackupProgressTracker(job.Name, jobNumber, jobCount, progress);
         try

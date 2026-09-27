@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging;
 namespace FolderBackup.App.Forms;
 
 /// <summary>
-/// Runs all enabled jobs and shows progress. Closing the window while a backup runs just hides it;
+/// Runs the given jobs and shows progress. Closing the window while a backup runs just hides it;
 /// the tray icon reports the result. The Cancel button stops the backup.
 /// </summary>
 internal sealed class ProgressForm : Form
@@ -15,7 +15,8 @@ internal sealed class ProgressForm : Form
     private const int ProgressBarMaximum = 1000;
     private const double FullPercent = 100;
 
-    private readonly IConfiguredBackupService _backupService;
+    private readonly IBackupService _backupService;
+    private readonly IReadOnlyList<BackupJob> _jobs;
     private readonly ILogger<ProgressForm> _logger;
     private readonly CancellationTokenSource _cancellation = new();
 
@@ -28,10 +29,11 @@ internal sealed class ProgressForm : Form
 
     private bool _closeWhenFinished;
 
-    public ProgressForm(IConfiguredBackupService backupService, ILogger<ProgressForm> logger)
+    public ProgressForm(IBackupService backupService, ILogger<ProgressForm> logger, IReadOnlyList<BackupJob> jobs)
     {
         _backupService = backupService;
         _logger = logger;
+        _jobs = jobs;
 
         InitializeLayout();
         _actionButton.Click += (_, _) => OnActionClicked();
@@ -148,7 +150,7 @@ internal sealed class ProgressForm : Form
         IsRunning = true;
         try
         {
-            var result = await _backupService.RunEnabledJobsAsync(new Progress<BackupProgress>(Render), _cancellation.Token);
+            var result = await _backupService.RunAsync(_jobs, new Progress<BackupProgress>(Render), _cancellation.Token);
             IsRunning = false;
             ShowResult(result);
             BackupCompleted?.Invoke(this, result);

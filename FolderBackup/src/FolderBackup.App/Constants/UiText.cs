@@ -26,11 +26,12 @@ internal static class UiText
     public const string ScheduleGroup = "Schedule";
     public const string ColumnName = "Name";
     public const string ColumnSource = "Source";
-    public const string ColumnDestination = "Backup folder";
+    public const string ColumnDestination = "Backs up to";
     public const string ColumnMode = "Mode";
     public const string Add = "Add…";
     public const string Edit = "Edit…";
     public const string Remove = "Remove";
+    public const string RunNow = "Run now";
     public const string RunAutomatically = "Run backups automatically";
     public const string FrequencyLabel = "Frequency:";
     public const string AtLabel = "at";
@@ -75,6 +76,8 @@ internal static class UiText
     public const string ResultTitleAlreadyRunning = "Backup already running";
     public const string ResultAlreadyRunning = "Another backup is in progress, so this one was skipped.";
     public const string ResultNoJobs = "There are no enabled backup jobs. Add one in Settings.";
+
+    public static string TargetPreview(string targetPath) => $"Files will be copied to {targetPath}";
 
     public static string NextRun(DateTime when) => $"Next backup: {when:f}";
 

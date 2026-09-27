@@ -13,6 +13,8 @@ internal sealed class SettingsForm : Form
 {
     private readonly ISettingsRepository _settingsRepository;
     private readonly IScheduleService _scheduleService;
+    private readonly IBackupTargetResolver _targetResolver;
+    private readonly IBackupLauncher _backupLauncher;
     private readonly IFormFactory _formFactory;
     private readonly ILogger<SettingsForm> _logger;
 
@@ -28,6 +30,7 @@ internal sealed class SettingsForm : Form
     private readonly Button _addButton = CreateButton(UiText.Add);
     private readonly Button _editButton = CreateButton(UiText.Edit);
     private readonly Button _removeButton = CreateButton(UiText.Remove);
+    private readonly Button _runButton = CreateButton(UiText.RunNow);
 
     private readonly CheckBox _scheduleEnabled = new() { Text = UiText.RunAutomatically, AutoSize = true };
     private readonly ComboBox _frequency = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 110 };
@@ -42,11 +45,15 @@ internal sealed class SettingsForm : Form
     public SettingsForm(
         ISettingsRepository settingsRepository,
         IScheduleService scheduleService,
+        IBackupTargetResolver targetResolver,
+        IBackupLauncher backupLauncher,
         IFormFactory formFactory,
         ILogger<SettingsForm> logger)
     {
         _settingsRepository = settingsRepository;
         _scheduleService = scheduleService;
+        _targetResolver = targetResolver;
+        _backupLauncher = backupLauncher;
         _formFactory = formFactory;
         _logger = logger;
 
@@ -85,7 +92,8 @@ internal sealed class SettingsForm : Form
     private GroupBox CreateJobsGroup()
     {
         var buttons = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, AutoSize = true, Dock = DockStyle.Fill };
-        buttons.Controls.AddRange([_addButton, _editButton, _removeButton]);
+        _runButton.Margin = new Padding(3, 15, 3, 3);
+        buttons.Controls.AddRange([_addButton, _editButton, _removeButton, _runButton]);
 
         var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1 };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
@@ -164,6 +172,7 @@ internal sealed class SettingsForm : Form
         _addButton.Click += (_, _) => AddJob();
         _editButton.Click += (_, _) => EditSelectedJob();
         _removeButton.Click += (_, _) => RemoveSelectedJob();
+        _runButton.Click += (_, _) => RunSelectedJob();
         _scheduleEnabled.CheckedChanged += (_, _) => UpdateScheduleControls();
         _frequency.SelectedIndexChanged += (_, _) => UpdateScheduleControls();
         _saveButton.Click += async (_, _) => await SaveAsync();
@@ -232,11 +241,11 @@ internal sealed class SettingsForm : Form
         _jobList.EndUpdate();
     }
 
-    private static ListViewItem CreateItem(BackupJob job)
+    private ListViewItem CreateItem(BackupJob job)
     {
         var item = new ListViewItem(job.Name) { Checked = job.IsEnabled, Tag = job };
         item.SubItems.Add(job.SourcePath);
-        item.SubItems.Add(job.DestinationPath);
+        item.SubItems.Add(_targetResolver.TryGetTargetPath(job, out var targetPath) ? targetPath : job.DestinationPath);
         item.SubItems.Add(DisplayChoices.GetMode(job.Mode).Text);
         return item;
     }
@@ -269,7 +278,8 @@ internal sealed class SettingsForm : Form
 
     private bool TryEditJob(BackupJob job, out BackupJob result)
     {
-        using var editor = _formFactory.Create<JobEditorForm>(job);
+        IReadOnlyList<BackupJob> otherJobs = [.. ReadJobs().Where(other => other.Id != job.Id)];
+        using var editor = _formFactory.Create<JobEditorForm>(job, otherJobs);
         var accepted = editor.ShowDialog(this) == DialogResult.OK;
         result = editor.Job;
         return accepted;
@@ -290,11 +300,21 @@ internal sealed class SettingsForm : Form
         }
     }
 
+    /// <summary>Runs the selected job as it's shown in the list, even if it's disabled or not saved yet.</summary>
+    private void RunSelectedJob()
+    {
+        if (_jobList.SelectedItems is [var item])
+        {
+            _backupLauncher.Start([ReadJob(item)]);
+        }
+    }
+
     private void UpdateButtonStates()
     {
         var hasSelection = _jobList.SelectedItems.Count == 1;
         _editButton.Enabled = hasSelection;
         _removeButton.Enabled = hasSelection;
+        _runButton.Enabled = hasSelection;
     }
 
     // ---------------------------------------------------------------- Schedule
