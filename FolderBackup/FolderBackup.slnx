@@ -1,0 +1,6 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/FolderBackup.Core/FolderBackup.Core.csproj" />
+    <Project Path="src/FolderBackup.App/FolderBackup.App.csproj" />
+  </Folder>
+</Solution>
