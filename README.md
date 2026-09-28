@@ -87,15 +87,3 @@ src/
 
 Every service sits behind an interface and is injected through its constructor.
 The parser, command builder, validator and progress tracker are pure logic and easy to unit test.
-
-## Caveats
-
-- **The code has not been compiled yet.** It was written without access to a .NET SDK. Expect to fix a small typo or two on the first build.
-- **Locked files.** Robocopy can't copy files that another program has open (for example an open Outlook `.pst`). They're retried, reported as errors and logged. The next run picks them up.
-- **No `/MT`.** Multithreaded copying turns off robocopy's per-file progress output, so it isn't used.
-- **"Files copied"** counts files that robocopy reported as reaching 100%.
-- **Scheduled runs happen only while you're logged on.** The task uses your normal user account and doesn't store a password.
-- **If you move the exe,** open Settings and click Save again. This updates the scheduled task with the new path.
-- **The icon** is Windows' default application icon. Add your own `.ico` file and point `NotifyIcon.Icon` at it.
-- **The TaskScheduler NuGet package** is pinned at 2.11.0. Update it if a newer version is available.
-- **Targeting .NET 8** only needs a change in `Directory.Build.props`, plus replacing `System.Threading.Lock` with `object` (it's used in two places).
