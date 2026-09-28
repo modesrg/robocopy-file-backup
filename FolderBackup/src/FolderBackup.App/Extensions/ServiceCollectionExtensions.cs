@@ -10,6 +10,7 @@ internal static class ServiceCollectionExtensions
     {
         // Forms aren't registered: IFormFactory creates them on demand with their dependencies.
         services.AddSingleton<IFormFactory, FormFactory>();
+        services.AddSingleton<IBackupLauncher, BackupLauncher>();
         services.AddSingleton<IHeadlessBackupRunner, HeadlessBackupRunner>();
         services.AddSingleton<TrayApplicationContext>();
 

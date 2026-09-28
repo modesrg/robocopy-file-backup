@@ -17,21 +17,23 @@ internal sealed class TrayApplicationContext : ApplicationContext
     private const int MaxBalloonTextLength = 250;
     private const string Ellipsis = "…";
 
+    private readonly IBackupLauncher _backupLauncher;
     private readonly IFormFactory _formFactory;
     private readonly StorageOptions _storageOptions;
     private readonly ILogger<TrayApplicationContext> _logger;
     private readonly ContextMenuStrip _menu;
     private readonly NotifyIcon _notifyIcon;
 
-    private ProgressForm? _progressForm;
     private SettingsForm? _settingsForm;
     private bool _exitRequested;
 
     public TrayApplicationContext(
+        IBackupLauncher backupLauncher,
         IFormFactory formFactory,
         IOptions<StorageOptions> storageOptions,
         ILogger<TrayApplicationContext> logger)
     {
+        _backupLauncher = backupLauncher;
         _formFactory = formFactory;
         _storageOptions = storageOptions.Value;
         _logger = logger;
@@ -45,12 +47,17 @@ internal sealed class TrayApplicationContext : ApplicationContext
             Visible = true,
         };
         _notifyIcon.DoubleClick += (_, _) => ShowSettings();
+
+        _backupLauncher.RunCompleted += OnRunCompleted;
+        _backupLauncher.ProgressWindowClosed += OnProgressWindowClosed;
     }
 
     protected override void Dispose(bool disposing)
     {
         if (disposing)
         {
+            _backupLauncher.RunCompleted -= OnRunCompleted;
+            _backupLauncher.ProgressWindowClosed -= OnProgressWindowClosed;
             _notifyIcon.Dispose();
             _menu.Dispose();
         }
@@ -61,7 +68,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
     private ContextMenuStrip BuildMenu()
     {
         var menu = new ContextMenuStrip();
-        menu.Items.Add(UiText.MenuBackUpNow, null, (_, _) => StartBackup());
+        menu.Items.Add(UiText.MenuBackUpNow, null, async (_, _) => await BackUpEnabledJobsAsync());
         menu.Items.Add(UiText.MenuSettings, null, (_, _) => ShowSettings());
         menu.Items.Add(UiText.MenuOpenLogs, null, (_, _) => OpenLogFolder());
         menu.Items.Add(new ToolStripSeparator());
@@ -69,26 +76,22 @@ internal sealed class TrayApplicationContext : ApplicationContext
         return menu;
     }
 
-    private void StartBackup()
+    private async Task BackUpEnabledJobsAsync()
     {
-        if (_progressForm is { IsRunning: true })
+        try
         {
-            // Already running (maybe hidden): just bring it back.
-            _progressForm.Show();
-            _progressForm.Activate();
-            return;
+            await _backupLauncher.StartEnabledJobsAsync();
         }
-
-        // A finished run's result window may still be open; replace it with a fresh run.
-        _progressForm?.Close();
-
-        _progressForm = _formFactory.Create<ProgressForm>();
-        _progressForm.BackupCompleted += OnBackupCompleted;
-        _progressForm.FormClosed += OnProgressFormClosed;
-        _progressForm.Show();
+        catch (Exception ex)
+        {
+            // Top-level UI boundary, e.g. an unreadable settings file.
+            _logger.LogError(ex, "Could not start the backup.");
+            MessageBox.Show($"{UiText.LoadSettingsFailed}{Environment.NewLine}{Environment.NewLine}{ex.Message}",
+                UiText.AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
     }
 
-    private void OnBackupCompleted(object? sender, BackupRunResult result)
+    private void OnRunCompleted(object? sender, BackupRunResult result)
     {
         var text = RunResultFormatter.Summarize(result);
         if (text.Length > MaxBalloonTextLength)
@@ -99,10 +102,9 @@ internal sealed class TrayApplicationContext : ApplicationContext
         _notifyIcon.ShowBalloonTip(BalloonTimeoutMilliseconds, RunResultFormatter.GetTitle(result), text, RunResultFormatter.GetIcon(result));
     }
 
-    private void OnProgressFormClosed(object? sender, FormClosedEventArgs e)
+    private void OnProgressWindowClosed(object? sender, EventArgs e)
     {
-        _progressForm = null;
-        if (_exitRequested)
+        if (_exitRequested && !_backupLauncher.IsRunning)
         {
             ExitApplication();
         }
@@ -136,7 +138,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
 
     private void RequestExit()
     {
-        if (_progressForm is not { IsRunning: true })
+        if (!_backupLauncher.IsRunning)
         {
             ExitApplication();
             return;
@@ -150,7 +152,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
 
         // Wait for robocopy to be stopped before exiting, so it isn't left running on its own.
         _exitRequested = true;
-        _progressForm.CancelAndClose();
+        _backupLauncher.CancelAndClose();
     }
 
     private void ExitApplication()

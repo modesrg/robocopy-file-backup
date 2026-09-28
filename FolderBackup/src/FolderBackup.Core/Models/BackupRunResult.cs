@@ -7,6 +7,6 @@ public sealed record BackupRunResult(BackupRunStatus Status, IReadOnlyList<Backu
 
     public static BackupRunResult AlreadyRunning() => new(BackupRunStatus.AlreadyRunning, [], null);
 
-    public static BackupRunResult Completed(IReadOnlyList<BackupJobResult> jobs, string logFilePath) =>
+    public static BackupRunResult Completed(IReadOnlyList<BackupJobResult> jobs, string? logFilePath) =>
         new(BackupRunStatus.Completed, jobs, logFilePath);
 }

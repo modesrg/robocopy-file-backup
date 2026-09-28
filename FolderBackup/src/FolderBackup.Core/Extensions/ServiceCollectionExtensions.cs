@@ -22,6 +22,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IRobocopyOutputParser, RobocopyOutputParser>();
         services.AddSingleton<IRobocopyCommandBuilder, RobocopyCommandBuilder>();
         services.AddSingleton<IRobocopyRunner, RobocopyRunner>();
+        services.AddSingleton<IBackupTargetResolver, BackupTargetResolver>();
         services.AddSingleton<IBackupJobValidator, BackupJobValidator>();
         services.AddSingleton<IBackupRunLock, NamedSemaphoreRunLock>();
         services.AddSingleton<IBackupLogFactory, FileBackupLogFactory>();
