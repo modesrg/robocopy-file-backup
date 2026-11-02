@@ -22,6 +22,8 @@ internal sealed class TrayApplicationContext : ApplicationContext
     private readonly StorageOptions _storageOptions;
     private readonly ILogger<TrayApplicationContext> _logger;
     private readonly ContextMenuStrip _menu;
+    private readonly Icon _idleIcon = AppIcons.ForTray(AppIcons.Application);
+    private readonly Icon _busyIcon = AppIcons.ForTray(AppIcons.Busy);
     private readonly NotifyIcon _notifyIcon;
 
     private SettingsForm? _settingsForm;
@@ -41,7 +43,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
         _menu = BuildMenu();
         _notifyIcon = new NotifyIcon
         {
-            Icon = SystemIcons.Application,
+            Icon = _idleIcon,
             Text = UiText.AppTitle,
             ContextMenuStrip = _menu,
             Visible = true,
@@ -50,6 +52,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
 
         _backupLauncher.RunCompleted += OnRunCompleted;
         _backupLauncher.ProgressWindowClosed += OnProgressWindowClosed;
+        _backupLauncher.RunningChanged += OnRunningChanged;
     }
 
     protected override void Dispose(bool disposing)
@@ -58,8 +61,11 @@ internal sealed class TrayApplicationContext : ApplicationContext
         {
             _backupLauncher.RunCompleted -= OnRunCompleted;
             _backupLauncher.ProgressWindowClosed -= OnProgressWindowClosed;
+            _backupLauncher.RunningChanged -= OnRunningChanged;
             _notifyIcon.Dispose();
             _menu.Dispose();
+            _idleIcon.Dispose();
+            _busyIcon.Dispose();
         }
 
         base.Dispose(disposing);
@@ -89,6 +95,14 @@ internal sealed class TrayApplicationContext : ApplicationContext
             MessageBox.Show($"{UiText.LoadSettingsFailed}{Environment.NewLine}{Environment.NewLine}{ex.Message}",
                 UiText.AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
+    }
+
+    /// <summary>Shows the amber-dot icon while a backup runs, wherever it was started from.</summary>
+    private void OnRunningChanged(object? sender, EventArgs e)
+    {
+        var isRunning = _backupLauncher.IsRunning;
+        _notifyIcon.Icon = isRunning ? _busyIcon : _idleIcon;
+        _notifyIcon.Text = isRunning ? UiText.TrayBackingUp : UiText.AppTitle;
     }
 
     private void OnRunCompleted(object? sender, BackupRunResult result)

@@ -28,6 +28,7 @@ internal sealed class ProgressForm : Form
     private readonly Button _actionButton = new() { Text = UiText.Cancel, AutoSize = true, MinimumSize = new Size(90, 0) };
 
     private bool _closeWhenFinished;
+    private bool _isRunning;
 
     public ProgressForm(IBackupService backupService, ILogger<ProgressForm> logger, IReadOnlyList<BackupJob> jobs)
     {
@@ -41,7 +42,22 @@ internal sealed class ProgressForm : Form
 
     public event EventHandler<BackupRunResult>? BackupCompleted;
 
-    public bool IsRunning { get; private set; }
+    public event EventHandler? RunningChanged;
+
+    public bool IsRunning
+    {
+        get => _isRunning;
+        private set
+        {
+            if (_isRunning == value)
+            {
+                return;
+            }
+
+            _isRunning = value;
+            RunningChanged?.Invoke(this, EventArgs.Empty);
+        }
+    }
 
     /// <summary>Cancels a running backup and closes the window once it has stopped.</summary>
     public void CancelAndClose()
@@ -91,7 +107,7 @@ internal sealed class ProgressForm : Form
     private void InitializeLayout()
     {
         Text = UiText.ProgressTitle;
-        Icon = SystemIcons.Application;
+        Icon = AppIcons.Application;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
         StartPosition = FormStartPosition.CenterScreen;

@@ -66,7 +66,7 @@ internal sealed class SettingsForm : Form
     private void InitializeLayout()
     {
         Text = UiText.SettingsTitle;
-        Icon = SystemIcons.Application;
+        Icon = AppIcons.Application;
         StartPosition = FormStartPosition.CenterScreen;
         Size = new Size(860, 560);
         MinimumSize = new Size(680, 460);

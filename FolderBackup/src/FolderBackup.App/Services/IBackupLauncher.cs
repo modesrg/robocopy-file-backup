@@ -12,6 +12,9 @@ internal interface IBackupLauncher
 
     event EventHandler? ProgressWindowClosed;
 
+    /// <summary>Raised when a backup starts or stops; check <see cref="IsRunning"/>.</summary>
+    event EventHandler? RunningChanged;
+
     bool IsRunning { get; }
 
     /// <summary>Runs the given jobs, whether or not they're enabled. If a backup is already running, shows it instead.</summary>

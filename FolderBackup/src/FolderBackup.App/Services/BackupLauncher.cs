@@ -20,6 +20,8 @@ internal sealed class BackupLauncher : IBackupLauncher
 
     public event EventHandler? ProgressWindowClosed;
 
+    public event EventHandler? RunningChanged;
+
     public bool IsRunning => _progressForm is { IsRunning: true };
 
     public void Start(IReadOnlyList<BackupJob> jobs)
@@ -36,6 +38,7 @@ internal sealed class BackupLauncher : IBackupLauncher
 
         var form = _formFactory.Create<ProgressForm>(jobs);
         form.BackupCompleted += (_, result) => RunCompleted?.Invoke(this, result);
+        form.RunningChanged += (_, _) => RunningChanged?.Invoke(this, EventArgs.Empty);
         form.FormClosed += OnProgressFormClosed;
         _progressForm = form;
         form.Show();

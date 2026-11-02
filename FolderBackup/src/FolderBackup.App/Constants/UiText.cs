@@ -17,6 +17,7 @@ internal static class UiText
     public const string MenuSettings = "Settings…";
     public const string MenuOpenLogs = "Open log folder";
     public const string MenuExit = "Exit";
+    public const string TrayBackingUp = "Folder Backup – backing up…";
     public const string ConfirmExitDuringBackup = "A backup is running. Cancel it and exit?";
     public const string OpenLogsFailed = "Couldn't open the log folder.";
 
